@@ -1,9 +1,12 @@
-import mongoose, { mongo } from "mongoose";
+import mongoose from "mongoose";
+
 
 const taskSchema = new mongoose.Schema({
     id: String,
-    desctription: String,
+    description: String,
     status: String
 });
 
-export const TaskModel = mongoose.model('Task', taskSchema);
+const TaskModel = mongoose.model('Task', taskSchema);
+
+export default TaskModel;

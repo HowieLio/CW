@@ -1,82 +1,58 @@
-import { readFile, writeFile } from 'node:fs';
-import { Task } from './models.js';
-import { EventEmitter } from 'events';
+import express from 'express';
+import mongoose from 'mongoose';
+import 'dotenv/config';
+import TaskModel from './taskModel.js';
 
-export class TaskManager extends EventEmitter{
-  constructor() {
-      super();
-      // this.tasks=[];
-      this.path = "./tasks.json";
-  }
-  loadTasks() {
-      return new Promise((resolve, reject) => {
-          const path = "./tasks.json";
-          readFile(path, 'utf8', (err, data) => {
-              if (err) {
-                  console.error("Ошибка чтения файла с задачами", err);
-                  reject(err);
-                  return;
-              }
-              const obj = JSON.parse(data);
-              resolve(tasks);
-              this.tasks = obj.map(task => {
-                  const newTask = new TaskModel(task);
-                  newTask.save();
-                  return newTask;
-              })
-          });
-      });
-  }
-  printTasks(tasks) {
-      if (!tasks || tasks.length === 0) {
-          console.log("Нет задач, который можно было бы напечатать.");
-          return;
-      }
+const app = express();
 
-      tasks.forEach(task => {
-          task.ToString();
-      });
-  }
-  async saveTasks(tasks) {
-      return new Promise((resolve, reject) => {
-          const tasksJson = JSON.stringify(tasks, null, 2);
-          writeFile(this.path, tasksJson, 'utf8', (err) => {
-              if (err) {
-                  console.error("Ошибка записи задачи в файл: ", err);
-                  reject(err);
-                  return;
-              }
-              resolve();
-          });
-      });
-  }
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    next();
+});
 
-  async addTask(task) {
-      try {
-          const tasks = await this.loadTasks();
-          tasks.push(task);
-          this.emit('taskAdded', task);
-          await this.saveTasks(tasks);
-          console.log("Задача успешно добавлена.");
-      } catch (error) {
-          console.error("Ошибка добавления задачи: ", error);
-      }
-  }
+const PORT = 3000;
 
-  async deleteTask(taskId) {
-      try {
-          const tasks = await this.loadTasks();
-          const index = tasks.findIndex(task => task.id === taskId);
-          if (index !== -1) {
-              const deletedTask = tasks.splice(index, 1)[0];
-              this.emit('TaskDeleted', deletedTask)
-              await this.saveTasks(tasks);
-              console.log("Задача успешно удалена.");
-          } else {
-              console.log("Задача не найдена.");
-          }
-      } catch (error) {
-          console.error("Ошибка при удалении задачи: ", error);
-      }
-  }
-}
+app.use(express.json());
+
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
+
+const mongoUri = `mongodb://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}?authSource=admin`;
+mongoose.connect(mongoUri)
+    .then(() => console.log('MongoDB connected'))
+    .catch(err => console.error('MongoDB connection error: ', err));
+
+app.get("/tasks", async (req, res) => {
+    try {
+        const tasks = await TaskModel.find();
+        res.json(tasks);
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+app.post("/tasks", async (req, res) => {
+    try {
+        const newTask = new TaskModel(req.body);
+        const savedTask = await newTask.save();
+        res.status(201).json(savedTask);
+    } catch (err) {
+        res.status(400).send(err.message);
+    }
+});
+
+app.delete("/tasks/:status", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deletedTask = await TaskModel.findOneAndDelete({ id });
+        if (!deletedTask) {
+            return res.status(404).send(id);
+        }
+        res.json(deletedTask);
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
